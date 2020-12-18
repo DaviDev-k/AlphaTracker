@@ -1,18 +1,16 @@
-#pragma clang diagnostic push
-#pragma ide diagnostic ignored "cppcoreguidelines-narrowing-conversions"
-#pragma ide diagnostic ignored "OCDFAInspection"
-#pragma ide diagnostic ignored "readability-convert-member-functions-to-static"
-
 #include <iostream>
-#include <cstring>
+#include <nlohmann/json.hpp>
 
 #include "console.h"
 #include "gui.h"
 
 using namespace std;
+using json = nlohmann::json;
 
+#define KEY begin().key()
+#define VALUE begin().value()
 
-void Gui::homeLoading(Settings set) {
+void Gui::homeLoading() {
     int y = 3;
     drawBox(15, y++, 28, 3);
     cout << c_bold << f_azr;
@@ -22,7 +20,7 @@ void Gui::homeLoading(Settings set) {
     cout << c_faint;
     y += 2;
     for (int i = 0; i < 3; i++) {
-        coutxy(set.sourceName[i], 29, y + 3 * i, CENTER);
+        coutxy(Settings::SOURCE[i], 29, y + 3 * i, CENTER);
         coutxy("...", 29, y + 1 + 3 * i, CENTER);
     }
     y += 10;
@@ -37,29 +35,26 @@ void Gui::homeLoading(Settings set) {
 }
 
 
-void Gui::homeUpdate(Settings set, int idx, int source) {
+void Gui::homeUpdate(const Settings &set, int idx, const string &val) {
     int y = 8;
     if (idx == 2 && set.isOpen[idx])
         coutxy(tab(100), 1, 1);
     cout << c_normal << (set.isOpen[idx] ? f_grn : c_faint);
-    coutxy(set.sourceName[idx], 29, y + 3 * idx, CENTER);
+    coutxy(Settings::SOURCE[idx], 29, y + 3 * idx, CENTER);
     cout << (set.isOpen[idx] ? c_normal : c_faint);
-    coutxy(set.genValue[source],
-           29 + (idx == 1) * (strlen(set.genValue[source]) % 2),
-           y + 1 + 3 * idx,
-           CENTER);
+    coutxy(val, 29 + (idx == 1) * (val.length() % 2), y + 1 + 3 * idx, CENTER);
     if (idx == 1)
         gotoxy(1, 1);
     cout << c_normal;
 }
 
 
-void Gui::homeSelect(Settings set, int idx) {
+void Gui::homeSelect(const Settings &set, int idx) {
     int y = 8;
     for (int i = 0; i < 3; i++) {
         cout << c_normal << (set.isOpen[i] ? f_grn : c_faint);
         if (i == set.openSource[idx]) cout << c_reverse;
-        coutxy(set.sourceName[i], 29, y + 3 * i, CENTER);
+        coutxy(Settings::SOURCE[i], 29, y + 3 * i, CENTER);
     }
     y += 10;
     cout << c_normal << f_ylw;
@@ -69,18 +64,18 @@ void Gui::homeSelect(Settings set, int idx) {
 }
 
 
-void Gui::settingsStable(Settings set) {
-    int y = 2, j = 0;
+void Gui::settingsStable(const Settings &set) {
+    int y = 2, src = 0;
     cout << c_bold << f_azr << c_uline;
     coutxy("IMPOSTAZIONI", 29, y++, CENTER);
-    for (int i = 0; i < SET_GEN_NUM; i++) {
+    for (int i = 0; i < set.j["GEN"].size(); i++) {
         if (i == 0 || i == 1 || i == 3) {
             cout << c_normal << f_grn;
-            coutxy(set.sourceName[j++], 29, ++y, CENTER);
+            coutxy(Settings::SOURCE[src++], 29, ++y, CENTER);
             cout << c_normal;
         }
         if (i != 4 && i != 6) y++;
-        drawBox(set.genName[i],
+        drawBox(set.j["GEN"][i].KEY,
                 ((i != 4 && i != 6) ? 5 : 29), y,
                 (i < 3 ? 47 : 23), 3, LEFT, f_ylw, NORMAL);
         if (i == 0 || i == 2) y += 3;
@@ -90,39 +85,54 @@ void Gui::settingsStable(Settings set) {
 }
 
 
-void Gui::settingsSelect(Settings set, int slc) {
-    int y = 4, len, dim;
-    char set_[256];
-    for (int i = 0; i < SET_GEN_NUM; i++) {
+void Gui::settingsSelect(const Settings &set, int slc) {
+
+    int y = 4;
+
+    for (int i = 0; i < set.j["GEN"].size(); i++) {
+
+        string key = set.j["GEN"][i].KEY;
+        string val = set.j["GEN"][i].VALUE;
+        int len = val.length();
+
         cout << f_ylw;
         if (slc == i) cout << c_reverse;
-        if (i != 4 && i != 6) y++;
+        if (key != "Porta" && key != "Password") y++;
         else y--;
-        gotoxy(((i != 4 && i != 6) ? 7 : 31), y);
-        cout << ' ' << set.genName[i] << ' ' << c_normal;
-        strcpy(set_, set.genValue[i]);
-        len = strlen(set_);
-        dim = (i < 3) ? 41 : 17;
-        if (len > dim) {
-            for (int j = 0; j < dim; j++)
-                set_[j] = set_[j + len - dim];
-            set_[dim] = '\0';
-        }
-        coutxy((len > dim ? '-' : ' '), ((i != 4 && i != 6) ? 7 : 31), ++y);
-        cout << set_;
-        if (i != 0) cout << c_blink << (slc == i ? bl_4 : " ") << ' ' << c_normal;
-        if (i == 0 || i == 2) y += 3;
-        if (i == 1 || i == 4) y += 1;
+
+        gotoxy(key != "Porta" && key != "Password" ? 7 : 31, y);
+        cout << ' ' << key << ' ' << c_normal; // name
+
+        int dim = (i < 3) ? 41 : 17;
+        if (len > dim)
+            val.substr(len - dim, len);
+
+        coutxy(len > dim ? "-" : " ",
+               key != "Porta" && key != "Password" ? 7 : 31,
+               ++y);
+        cout << val;
+
+        if (key != "Camera")
+            cout << c_blink << (slc == i ? bl_4 : " ") << ' ' << c_normal;
+        if (key == "Camera" || key == "File")
+            y += 3;
+        if (key == "Percorso" || key == "Porta")
+            y += 1;
+
+        i++;
     }
+
     gotoxy(1, 1);
+
 }
 
 
 void Gui::guiStable(Settings set) {
     drawBox("View", 2, 2, 24, 11, CENTER, f_grn, BOLD);
     cout << f_ylw;
-    for (int i = 0; i < SET_PRM_NUM_USER; i++)
-        coutxy(set.prmName[i], 4, 4 + 2 * i);
+    int i = 0;
+    for (json::iterator it = set.j["PRM"].begin(); it != set.j["PRM"].end(); ++it)
+        coutxy(*it, 4, 4 + 2 * i++);
     cout << c_normal;
     drawBox("Status", 2, 13, 24, 9, CENTER, f_grn, BOLD);
     cout << f_ylw;
@@ -165,6 +175,3 @@ void Gui::instructions() {
          << "     - [0]     ripristina i valori predefiniti\n"
          << "     - [+]     pausa/play\n\n";
 }
-
-
-#pragma clang diagnostic pop
